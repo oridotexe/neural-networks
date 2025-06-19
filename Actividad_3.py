@@ -1,16 +1,15 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+from sklearn.metrics import accuracy_score
 
 # 1. Cargar glass.data
-# --------------------
 data = np.loadtxt('glass.data', delimiter=',')
 
 # 2. Filtrar solo clases 1 y 2 (columna -1 es la clase)
-# ---------------------------------------------------
 X = data[:, 1:-1]  # columnas de atributos
 y = data[:, -1]    # columna de la clase
 
-# Quedarnos solo con clases 1 y 2
 mask = (y == 1) | (y == 2)
 X = X[mask]
 y = y[mask]
@@ -19,18 +18,15 @@ y = y[mask]
 y = np.where(y == 1, -1, 1)
 
 # 3. Seleccionar SOLO 2 features para visualización (RI y Mg)
-# ----------------------------------------------------------
 # Columna 0 (RI) y columna 2 (Mg)
 X = X[:, [0, 2]]
 
 # 4. Normalizar datos
-# -------------------
 X_mean = X.mean(axis=0)
 X_std = X.std(axis=0)
 X = (X - X_mean) / X_std
 
-# 5. Implementar Perceptron
-# -------------------------
+# 5. Perceptron
 class Perceptron:
     def __init__(self, eta=0.01, n_iter=50):
         self.eta = eta
@@ -56,8 +52,7 @@ class Perceptron:
     def predict(self, X):
         return np.where(self.net_input(X) >= 0.0, 1, -1)
 
-# 6. Implementar Adaline (gradiente descendente)
-# ---------------------------------------------
+# 6.  Adaline
 class AdalineGD:
     def __init__(self, eta=0.01, n_iter=50):
         self.eta = eta
@@ -87,7 +82,6 @@ class AdalineGD:
         return np.where(self.activation(X) >= 0.0, 1, -1)
 
 # 7. Función para graficar frontera de decisión
-# --------------------------------------------
 def plot_decision_regions(X, y, classifier, title):
     resolution = 0.02
 
@@ -122,36 +116,13 @@ def plot_decision_regions(X, y, classifier, title):
     plt.legend()
 
 # 8. Entrenar modelos
-# -------------------
 ppn = Perceptron(eta=0.01, n_iter=10)
 ppn.fit(X, y)
 
 ada = AdalineGD(eta=0.01, n_iter=50)
 ada.fit(X, y)
 
-# 9. Graficar curvas de error
-# --------------------------
-plt.figure(figsize=(12,5))
-
-# Perceptron
-tl1 = plt.subplot(1, 2, 1)
-tl1.plot(range(1, len(ppn.errors_) + 1), ppn.errors_, marker='o')
-tl1.set_xlabel('Épocas')
-tl1.set_ylabel('Número de errores')
-tl1.set_title('Perceptrón - Tasa de error')
-
-# Adaline
-tl2 = plt.subplot(1, 2, 2)
-tl2.plot(range(1, len(ada.cost_) + 1), ada.cost_, marker='o')
-tl2.set_xlabel('Épocas')
-tl2.set_ylabel('Costo (Error cuadrático)')
-tl2.set_title('Adaline - Curva de costo')
-
-plt.tight_layout()
-plt.show()
-
-# 10. Graficar frontera de decisión
-# --------------------------------
+# 10. Graficar
 plt.figure(figsize=(12,5))
 
 # Perceptron
@@ -165,10 +136,17 @@ plot_decision_regions(X, y, classifier=ada, title='Adaline - Frontera de decisi�
 plt.tight_layout()
 plt.show()
 
-# 11. Discusión
-print("\nDiscusión:")
-print("- El Perceptrón converge rápidamente, actualizando los pesos solo cuando hay errores de clasificación.")
-print("- El Adaline optimiza el error cuadrático medio, por lo que su curva de costo es más suave.")
-print("- Al usar solo 2 características (RI y Mg), se puede visualizar la frontera de decisión en 2D.")
-print("- La normalización mejora mucho la convergencia de Adaline.")
-print("- En este caso binario simple (clases 1 y 2), ambos modelos logran una buena separación.")
+# 11. Resultados
+y_pred_ppn = ppn.predict(X)
+y_pred_ada = ada.predict(X)
+
+acc_ppn = accuracy_score(y, y_pred_ppn) * 100
+acc_ada = accuracy_score(y, y_pred_ada) * 100
+
+print("\n--- Resultados del Perceptrón ---")
+print("Pesos finales:", ppn.w_)
+print(f"Precisión: {acc_ppn:.2f}%")
+
+print("\n--- Resultados del Adaline ---")
+print("Pesos finales:", ada.w_)
+print(f"Precisión: {acc_ada:.2f}%")
