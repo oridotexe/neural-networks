@@ -1,152 +1,151 @@
+# Realizado por Oriana Moreno CI 29929240
+
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-from sklearn.metrics import accuracy_score
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+from sklearn.manifold import TSNE
 
-# 1. Cargar glass.data
-data = np.loadtxt('glass.data', delimiter=',')
-
-# 2. Filtrar solo clases 1 y 2 (columna -1 es la clase)
-X = data[:, 1:-1]  # columnas de atributos
-y = data[:, -1]    # columna de la clase
-
-mask = (y == 1) | (y == 2)
-X = X[mask]
-y = y[mask]
-
-# Convertir y a etiquetas binarias: clase 1 -> -1, clase 2 -> +1
-y = np.where(y == 1, -1, 1)
-
-# 3. Seleccionar SOLO 2 features para visualización (RI y Mg)
-# Columna 0 (RI) y columna 2 (Mg)
-X = X[:, [0, 2]]
-
-# 4. Normalizar datos
-X_mean = X.mean(axis=0)
-X_std = X.std(axis=0)
-X = (X - X_mean) / X_std
-
-# 5. Perceptron
 class Perceptron:
-    def __init__(self, eta=0.01, n_iter=50):
-        self.eta = eta
-        self.n_iter = n_iter
-
-    def fit(self, X, y):
-        self.w_ = np.zeros(1 + X.shape[1])
+    def __init__(self, n_classes, n_features, lr=0.01, epochs=1000):
+        self.n_classes = n_classes
+        self.lr = lr
+        self.epochs = epochs
+        self.W = np.random.randn(n_classes, n_features + 1) * 0.01  
         self.errors_ = []
-
-        for _ in range(self.n_iter):
-            errors = 0
-            for xi, target in zip(X, y):
-                update = self.eta * (target - self.predict(xi))
-                self.w_[1:] += update * xi
-                self.w_[0] += update
-                errors += int(update != 0.0)
-            self.errors_.append(errors)
-        return self
-
-    def net_input(self, X):
-        return np.dot(X, self.w_[1:]) + self.w_[0]
+        self.acc_ = []
 
     def predict(self, X):
-        return np.where(self.net_input(X) >= 0.0, 1, -1)
-
-# 6.  Adaline
-class AdalineGD:
-    def __init__(self, eta=0.01, n_iter=50):
-        self.eta = eta
-        self.n_iter = n_iter
+        X_bias = np.c_[np.ones((X.shape[0], 1)), X]
+        scores = np.dot(X_bias, self.W.T)
+        return np.argmax(scores, axis=1)
 
     def fit(self, X, y):
-        self.w_ = np.zeros(1 + X.shape[1])
-        self.cost_ = []
+        X_bias = np.c_[np.ones((X.shape[0], 1)), X]
+        for _ in range(self.epochs):
+            errors = 0
+            for xi, target in zip(X_bias, y):
+                scores = np.dot(self.W, xi)
+                predicted = np.argmax(scores)
+                if predicted != target:
+                    self.W[target] += self.lr * xi
+                    self.W[predicted] -= self.lr * xi
+                    errors += 1
+            self.errors_.append(errors)
+            acc = np.mean(self.predict(X) == y)
+            self.acc_.append(acc)
 
-        for _ in range(self.n_iter):
-            net_input = self.net_input(X)
-            output = net_input
-            errors = y - output
-            self.w_[1:] += self.eta * X.T.dot(errors)
-            self.w_[0] += self.eta * errors.sum()
-            cost = (errors**2).sum() / 2.0
-            self.cost_.append(cost)
-        return self
-
-    def net_input(self, X):
-        return np.dot(X, self.w_[1:]) + self.w_[0]
-
-    def activation(self, X):
-        return self.net_input(X)
+class Adaline:
+    def __init__(self, n_classes, n_features, lr=0.01, epochs=1000):
+        self.n_classes = n_classes
+        self.lr = lr
+        self.epochs = epochs
+        self.W = np.random.randn(n_classes, n_features + 1) * 0.01
+        self.costs_ = []
+        self.acc_ = []
 
     def predict(self, X):
-        return np.where(self.activation(X) >= 0.0, 1, -1)
+        X_bias = np.c_[np.ones((X.shape[0], 1)), X]
+        net_input = np.dot(X_bias, self.W.T)
+        return np.argmax(net_input, axis=1)
 
-# 7. Función para graficar frontera de decisión
-def plot_decision_regions(X, y, classifier, title):
-    resolution = 0.02
+    def fit(self, X, y):
+        X_bias = np.c_[np.ones((X.shape[0], 1)), X]
+        Y = np.eye(self.n_classes)[y]  
 
-    markers = ('s', 'x')
-    colors = ('red', 'blue')
-    cmap = plt.cm.RdBu
+        for _ in range(self.epochs):
+            net_input = np.dot(X_bias, self.W.T)
+            errors = Y - net_input
+            self.W += self.lr * np.dot(errors.T, X_bias) / X.shape[0]
+            cost = (errors ** 2).sum() / 2.0
+            self.costs_.append(cost)
+            acc = np.mean(self.predict(X) == y)
+            self.acc_.append(acc)
 
-    x1_min, x1_max = X[:, 0].min() - 1, X[:, 0].max() + 1
-    x2_min, x2_max = X[:, 1].min() - 1, X[:, 1].max() + 1
+# --- Cargar datos ---
+try:
+    data = np.loadtxt('glass.data', delimiter=',')
+except FileNotFoundError:
+    print("Error: No se encontró el archivo glass.data")
+    sys.exit()
 
-    xx1, xx2 = np.meshgrid(np.arange(x1_min, x1_max, resolution),
-                           np.arange(x2_min, x2_max, resolution))
+X = data[:, 1:-1]
+y = data[:, -1].astype(int) 
 
-    Z = classifier.predict(np.array([xx1.ravel(), xx2.ravel()]).T)
-    Z = Z.reshape(xx1.shape)
+# Normalización
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
 
-    plt.contourf(xx1, xx2, Z, alpha=0.3, cmap=cmap)
-    plt.xlim(xx1.min(), xx1.max())
-    plt.ylim(xx2.min(), xx2.max())
+# Separar
+X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.3, random_state=42, stratify=y)
+n_classes = y.max() + 1 
 
-    for idx, cl in enumerate(np.unique(y)):
-        plt.scatter(x=X[y == cl, 0],
-                    y=X[y == cl, 1],
-                    alpha=0.8,
-                    c=colors[idx],
-                    marker=markers[idx],
-                    label=f'Clase {cl}')
 
-    plt.xlabel('RI (normalizado)')
-    plt.ylabel('Mg (normalizado)')
-    plt.title(title)
-    plt.legend()
+# --- Entrenar modelos ---
+perc = Perceptron(n_classes=n_classes, n_features=X.shape[1], lr=0.01, epochs=100)
+perc.fit(X_train, y_train)
 
-# 8. Entrenar modelos
-ppn = Perceptron(eta=0.01, n_iter=10)
-ppn.fit(X, y)
+adal = Adaline(n_classes=n_classes, n_features=X.shape[1], lr=0.01, epochs=100)
+adal.fit(X_train, y_train)
 
-ada = AdalineGD(eta=0.01, n_iter=50)
-ada.fit(X, y)
+# --- Evaluar ---
+y_pred_perc = perc.predict(X_test)
+y_pred_adal = adal.predict(X_test)
 
-# 10. Graficar
+acc_perc = np.mean(y_pred_perc == y_test) * 100
+acc_adal = np.mean(y_pred_adal == y_test) * 100
+
+print(f"\n--- Resultados del Perceptron ---")
+print(f"Precisión en test: {acc_perc:.2f}%")
+
+print(f"\n--- Resultados de Adaline ---")
+print(f"Precisión en test: {acc_adal:.2f}%")
+
+# --- Graficar ---
 plt.figure(figsize=(12,5))
 
-# Perceptron
-plt.subplot(1,2,1)
-plot_decision_regions(X, y, classifier=ppn, title='Perceptrón - Frontera de decisión')
+plt.subplot(1, 2, 1)
+plt.plot(perc.errors_, label="Errores - Perceptrón", color="blue")
+plt.xlabel("Épocas")
+plt.ylabel("Errores")
+plt.title("Errores por época - Perceptrón")
+plt.grid(True)
+plt.legend()
 
-# Adaline
-plt.subplot(1,2,2)
-plot_decision_regions(X, y, classifier=ada, title='Adaline - Frontera de decisión')
+plt.subplot(1, 2, 2)
+plt.plot(adal.costs_, label="Coste - Adaline", color="red")
+plt.xlabel("Épocas")
+plt.ylabel("Costo")
+plt.title("Costo por época - Adaline")
+plt.grid(True)
+plt.legend()
 
 plt.tight_layout()
 plt.show()
 
-# 11. Resultados
-y_pred_ppn = ppn.predict(X)
-y_pred_ada = ada.predict(X)
+# --- Grafico de precisión ---
+plt.figure(figsize=(10,4))
+plt.plot(perc.acc_, label="Perceptrón", color="blue")
+plt.plot(adal.acc_, label="Adaline", color="red")
+plt.xlabel("Épocas")
+plt.ylabel("Precisión")
+plt.title("Precisión por época")
+plt.grid(True)
+plt.legend()
+plt.show()
 
-acc_ppn = accuracy_score(y, y_pred_ppn) * 100
-acc_ada = accuracy_score(y, y_pred_ada) * 100
+# --- Grafico de datos ---
+tsne = TSNE(n_components=2, random_state=42, perplexity=30)
+X_tsne = tsne.fit_transform(X_scaled)
+labels = np.unique(y)
 
-print("\n--- Resultados del Perceptrón ---")
-print("Pesos finales:", ppn.w_)
-print(f"Precisión: {acc_ppn:.2f}%")
+plt.figure(figsize=(8, 6))
+for i, label in enumerate(labels):
+    plt.scatter(X_tsne[y == label, 0], X_tsne[y == label, 1],
+                label=f'Clase {label}', alpha=0.7, edgecolors='k', s=50)
+labels = np.unique(y)  
 
-print("\n--- Resultados del Adaline ---")
-print("Pesos finales:", ada.w_)
-print(f"Precisión: {acc_ada:.2f}%")
+plt.legend()
+plt.tight_layout()
+plt.show()
